@@ -4,7 +4,7 @@ description: >-
   Assembles journal **whole figures** from `<bundle>/figures/design.txt` using a **single
   layout model**: treat the file as a **character cell matrix** (one char per column per
   line), compute each panel letter’s **axis-aligned bounding box** in **NPC** coordinates,
-  then **`cowplot::ggdraw` + `draw_plot`** (+ **`draw_label`** for panel tags). **R helpers (`fig02_*`)** are **embedded in this skill** (no dependency on another repo file). Covers **# spacer** / tag-only slots, optional **journal tag
+  then **`cowplot::ggdraw` + `draw_plot`** (+ **`draw_label`** for panel tags). **R helpers (`manuscript_*` layout API)** are **embedded in this skill** (no dependency on another repo file). Covers **# spacer** / tag-only slots, optional **journal tag
   remap** (design letter ≠ printed tag), **ggsave** width/height/scale per project,
   **bbox CSV** QA, optional **pixel checks**, and **Illustrator** hybrid handoff. Run with
   **`conda activate R`**. Pair with **`manuscript-figure-curation`** for per-panel
@@ -57,26 +57,26 @@ description: >-
 
 ## Tag remap (design letter → printed tag)
 
-When the journal uses **continuous A…N** on the figure but **`design.txt`** uses **gaps** (e.g. design **`K`** should print **`J`**), build a **named vector** `tag_map` (names = design letters, values = printed tags). In the **`draw_label`** loop, use **`if (letter %in% names(tag_map)) unname(tag_map[[letter]]) else letter`**, or extend **`fig02_cowplot_assemble_from_design_matrix`** in your bundle with an optional **`tag_map`** argument.
+When the journal uses **continuous A…N** on the figure but **`design.txt`** uses **gaps** (e.g. design **`K`** should print **`J`**), build a **named vector** `tag_map` (names = design letters, values = printed tags). In the **`draw_label`** loop, use **`if (letter %in% names(tag_map)) unname(tag_map[[letter]]) else letter`**, or extend **`manuscript_cowplot_assemble_from_design_matrix`** in your bundle with an optional **`tag_map`** argument.
 
 ```r
 tag_map <- c(K = "J", L = "K")  # example only; names must match design.txt letters
 label_for <- function(letter) if (letter %in% names(tag_map)) unname(tag_map[[letter]]) else letter
 ```
 
-## Embedded R — **`fig02_*`** (`design.txt` → bbox → `draw_plot` + `draw_label`)
+## Embedded R — **`manuscript_*`** (`design.txt` → bbox → `draw_plot` + `draw_label`)
 
 Copy into **`<bundle>/scripts/`** as-is or **`source()`** once per composite script. **Requires** `cowplot`.
 
 ```r
 # design.txt cell grid -> NPC bounding boxes -> cowplot::ggdraw + draw_plot + draw_label
 # Public API:
-#   fig02_read_design_char_matrix(path)
-#   fig02_design_matrix_panel_bbox_table(mat)
-#   fig02_design_matrix_assert_rectangular_panels(mat, letters)
-#   fig02_cowplot_assemble_from_design_matrix(mat, plot_list, label_args)
+#   manuscript_read_design_char_matrix(path)
+#   manuscript_design_matrix_panel_bbox_table(mat)
+#   manuscript_design_matrix_assert_rectangular_panels(mat, letters)
+#   manuscript_cowplot_assemble_from_design_matrix(mat, plot_list, label_args)
 
-fig02_read_design_char_matrix <- function(path) {
+manuscript_read_design_char_matrix <- function(path) {
     if (!file.exists(path)) stop("Missing design file: ", path)
     lines <- readLines(path, warn = FALSE)
     lines <- lines[nzchar(lines)]
@@ -100,7 +100,7 @@ fig02_read_design_char_matrix <- function(path) {
     mat
 }
 
-fig02_design_matrix_panel_bbox_table <- function(mat) {
+manuscript_design_matrix_panel_bbox_table <- function(mat) {
     n_rows <- nrow(mat)
     n_cols <- ncol(mat)
     letters <- sort(setdiff(unique(as.vector(mat)), "#"))
@@ -137,7 +137,7 @@ fig02_design_matrix_panel_bbox_table <- function(mat) {
     do.call(rbind, rows)
 }
 
-fig02_design_matrix_assert_rectangular_panels <- function(mat, letters) {
+manuscript_design_matrix_assert_rectangular_panels <- function(mat, letters) {
     for (plot_name in letters) {
         idx <- which(mat == plot_name, arr.ind = TRUE)
         if (!nrow(idx)) next
@@ -158,15 +158,15 @@ fig02_design_matrix_assert_rectangular_panels <- function(mat, letters) {
     invisible(NULL)
 }
 
-fig02_cowplot_assemble_from_design_matrix <- function(mat, plot_list, label_args) {
+manuscript_cowplot_assemble_from_design_matrix <- function(mat, plot_list, label_args) {
     n_rows <- nrow(mat)
     n_cols <- ncol(mat)
     letters_in_mat <- setdiff(unique(as.vector(mat)), "#")
-    fig02_design_matrix_assert_rectangular_panels(mat, letters_in_mat)
+    manuscript_design_matrix_assert_rectangular_panels(mat, letters_in_mat)
 
-    tbl <- fig02_design_matrix_panel_bbox_table(mat)
+    tbl <- manuscript_design_matrix_panel_bbox_table(mat)
     if (!nrow(tbl)) {
-        stop("fig02_cowplot_assemble_from_design_matrix: no panel letters in matrix.")
+        stop("manuscript_cowplot_assemble_from_design_matrix: no panel letters in matrix.")
     }
 
     missing <- setdiff(tbl$letter, names(plot_list))
@@ -226,7 +226,7 @@ fig02_cowplot_assemble_from_design_matrix <- function(mat, plot_list, label_args
 
 - **Exports:** e.g. **`F*/figures/Fig0N_composite_drawplot.png`** and **`.pdf`** (keep legacy stems until the project retires them).
 - **Log:** **`F*/scripts/Fig0N_composite_drawplot.R.log`** (same basename rule as other R scripts if the project requires it).
-- **Optional QA:** **`F*/scripts/Fig0N_composite_drawplot_layout_bbox.csv`** from **`fig02_design_matrix_panel_bbox_table(mat)`**.
+- **Optional QA:** **`F*/scripts/Fig0N_composite_drawplot_layout_bbox.csv`** from **`manuscript_design_matrix_panel_bbox_table(mat)`**.
 - Register in **`figure_manifest.yaml`** (see **manuscript-figure-curation** for entry shape).
 
 ## Export defaults (align with `.cursorrules`)
@@ -250,7 +250,7 @@ gray = np.array(Image.open("composite.png").convert("L"))
 
 ## Reference code — inline string layout (`cowplot_design`)
 
-For quick experiments **without** a `design.txt` file on disk: same **NPC** math as **## Algorithm** and **`fig02_*`**. For production, prefer **`fig02_read_design_char_matrix`** + **`fig02_cowplot_assemble_from_design_matrix`** (embedded above).
+For quick experiments **without** a `design.txt` file on disk: same **NPC** math as **## Algorithm** and **`manuscript_*`**. For production, prefer **`manuscript_read_design_char_matrix`** + **`manuscript_cowplot_assemble_from_design_matrix`** (embedded above).
 
 ```r
 library(ggplot2)
